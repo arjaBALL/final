@@ -1,165 +1,162 @@
 <?php
 require 'vendor/autoload.php';
 
-use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 
-// Database connection details
-$servername = "localhost";
-$username = "root"; // Default username for XAMPP
-$password = "";     // Default password for XAMPP
-$dbname = "isadfc";
+// Database connection
+$host = '127.0.0.1';
+$db = 'isadfc';
+$user = 'root';
+$pass = '';
 
-// Connect to the database
-$conn = new mysqli($servername, $username, $password, $dbname);
+try {
+    $mysqli = new mysqli($host, $user, $pass, $db);
+    if ($mysqli->connect_error) {
+        throw new Exception("Connection failed: " . $mysqli->connect_error);
+    }
 
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
+    // Output directory setup
+    $outputDir = 'C:/xampp/htdocs/roomasm-master/output/';
+    if (!is_dir($outputDir)) {
+        mkdir($outputDir, 0777, true);
+    }
+    if (!is_writable($outputDir)) {
+        throw new Exception("Error: The output directory is not writable.");
+    }
 
-// SQL query to fetch schedule data grouped by floor
-$sql = "
-   SELECT
-    schedules.schedule_id, 
-    floors.floor_number, 
-    rooms.room_name, 
-    schedules.day_of_week, 
-    schedules.start_time, 
-    schedules.end_time, 
-    subjects.subject_code, 
-    teaching_faculty_information.first_name, 
-    teaching_faculty_information.last_name
-FROM schedules
-INNER JOIN floors ON schedules.floor_id = floors.floor_id
-INNER JOIN rooms ON schedules.room_id = rooms.room_id
-INNER JOIN subjects ON schedules.subject_id = subjects.subject_id
-INNER JOIN teaching_faculty_information ON schedules.id = teaching_faculty_information.id
-ORDER BY schedules.day_of_week, schedules.start_time
-";
+    $outputPath = $outputDir . 'master_schedule.xlsx';
+    $spreadsheet = new Spreadsheet();
 
-$result = $conn->query($sql);
-if (!$result) {
-    die("Query failed: " . $conn->error);
-}
+    // Get all distinct courses
+    $courseQuery = "SELECT DISTINCT course FROM courses ORDER BY course";
+    $courseResult = $mysqli->query($courseQuery);
 
-// Create a new spreadsheet
-$spreadsheet = new Spreadsheet();
+    $sheetIndex = 0;
+    while ($courseRow = $courseResult->fetch_assoc()) {
+        $course = $courseRow['course'];
 
-// Initialize variables to track the current floor and room
-$previousFloor = '';
-$previousRoom = '';
-$currentRow = 1;
-
-// Function to set and format floor header
-function setFloorHeader($sheet, $row, $floorNumber)
-{
-    $sheet->setCellValue('A' . $row, 'Floor: ' . $floorNumber);
-    $sheet->mergeCells('A' . $row . ':L' . $row);
-    $sheet->getStyle('A' . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-    $sheet->getStyle('A' . $row)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-}
-
-// Function to set and format room header
-function setRoomHeader($sheet, $row, $roomName)
-{
-    $sheet->setCellValue('A' . $row, 'Room: ' . $roomName);
-    $sheet->mergeCells('A' . $row . ':L' . $row);
-    $sheet->getStyle('A' . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-    $sheet->getStyle('A' . $row)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-}
-
-// Insert headers for each day of the week
-function insertDayHeaders($sheet, $row)
-{
-    $sheet->setCellValue('A' . $row, 'Monday / Wednesday');
-    $sheet->mergeCells('A' . $row . ':D' . $row);
-    $sheet->setCellValue('E' . $row, 'Tuesday / Thursday');
-    $sheet->mergeCells('E' . $row . ':H' . $row);
-    $sheet->setCellValue('I' . $row, 'Friday / Saturday');
-    $sheet->mergeCells('I' . $row . ':L' . $row);
-    $sheet->getStyle('A' . $row . ':L' . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-    $sheet->getStyle('A' . $row . ':L' . $row)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-}
-
-// Column mapping for each day of the week
-$dayColumns = [
-    'Monday' => 'A',
-    'Tuesday' => 'E',
-    'Wednesday' => 'A',
-    'Thursday' => 'E',
-    'Friday' => 'I',
-    'Saturday' => 'I',
-];
-
-// Process each row of the result
-while ($data = $result->fetch_assoc()) {
-    $floorNumber = $data['floor_number'];
-    $roomName = $data['room_name'];
-    $dayOfWeek = $data['day_of_week'];
-
-    // Handle new floor
-    if ($floorNumber != $previousFloor) {
-        // Create a new sheet for the new floor
-        if ($previousFloor != '') {
-            $sheet = $spreadsheet->createSheet();
+        // Create a new sheet for each course
+        if ($sheetIndex > 0) {
+            $sheet = $spreadsheet->createSheet($sheetIndex);
         } else {
             $sheet = $spreadsheet->getActiveSheet();
         }
-        $sheet->setTitle('Floor ' . $floorNumber);
-        $currentRow = 1;
-        setFloorHeader($sheet, $currentRow, $floorNumber);
-        $currentRow += 2;
-        $previousRoom = '';
+        $sheet->setTitle($course);
+        $spreadsheet->setActiveSheetIndex($sheetIndex);
+        $sheetIndex++;
+
+        // Add header information
+        $sheet->setCellValue('A1', 'ASIAN DEVELOPMENT FOUNDATION COLLEGE');
+        $sheet->setCellValue('A2', 'Tacloban City');
+        $sheet->setCellValue('A4', 'MASTER SCHEDULE');
+        $sheet->setCellValue('A5', 'Computer Studies & Engineering Department');
+        $sheet->setCellValue('A6', '2nd Semester, S.Y. 2024-2025');
+
+        // Format headers
+        foreach (['A1:E1', 'A2:E2', 'A4:E4', 'A5:E5', 'A6:E6'] as $range) {
+            $sheet->mergeCells($range);
+            $sheet->getStyle($range)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle($range)->getFont()->setBold(true);
+        }
+
+        $currentRow = 8; // Start after headers
+
+        // Get blocks for this course
+        $blockQuery = "SELECT DISTINCT block FROM courses WHERE course = ? ORDER BY block";
+        $blockStmt = $mysqli->prepare($blockQuery);
+        $blockStmt->bind_param('s', $course);
+        $blockStmt->execute();
+        $blockResult = $blockStmt->get_result();
+
+        while ($blockRow = $blockResult->fetch_assoc()) {
+            $block = $blockRow['block'];
+
+            // Add block header
+            $sheet->setCellValue("A$currentRow", strtoupper("$course - $block"));
+            $sheet->mergeCells("A$currentRow:E$currentRow");
+            $sheet->getStyle("A$currentRow")->getFont()->setBold(true);
+            $sheet->getStyle("A$currentRow")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+            // Add table headers
+            $currentRow++;
+            $headers = ['CODE', 'SUBJECTS', 'TIME', 'DAY/S', 'ROOM'];
+            $sheet->fromArray($headers, NULL, "A$currentRow");
+
+            // Format column headers
+            $headerRange = "A$currentRow:E$currentRow";
+            $sheet->getStyle($headerRange)->applyFromArray([
+                'font' => ['bold' => true],
+                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
+            ]);
+
+            // Get subjects for this block without sorting by subject
+            $subjectQuery = "SELECT 
+                course_code,
+                subject_code,
+                CONCAT(TIME_FORMAT(start_time, '%H:%i'), '-', TIME_FORMAT(end_time, '%H:%i')) as time,
+                days,
+                room
+            FROM courses 
+            WHERE course = ? AND block = ?";
+
+            $stmt = $mysqli->prepare($subjectQuery);
+            $stmt->bind_param('ss', $course, $block);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            // Add subject data
+            while ($row = $result->fetch_assoc()) {
+                $currentRow++;
+                $data = [
+                    $row['course_code'],
+                    $row['subject_code'],
+                    $row['time'],
+                    $row['days'],
+                    $row['room']
+                ];
+                $sheet->fromArray([$data], NULL, "A$currentRow");
+
+                // Format data cells
+                $sheet->getStyle("A$currentRow:E$currentRow")->applyFromArray([
+                    'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
+                ]);
+            }
+
+            $currentRow += 2; // Add space between blocks
+            $stmt->close();
+        }
+        $blockStmt->close();
+
+        // Auto-size columns
+        foreach (range('A', 'E') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        // Set row height for header rows
+        $sheet->getRowDimension(1)->setRowHeight(30);
+        $sheet->getRowDimension(4)->setRowHeight(30);
     }
 
-    // Handle new room
-    if ($roomName != $previousRoom) {
-        setRoomHeader($sheet, $currentRow, $roomName);
-        $currentRow++;
-        insertDayHeaders($sheet, $currentRow);
-        $currentRow++;
-        $sheet->fromArray(['Code', 'Teacher', 'Start Time', 'End Time', 'Code', 'Teacher', 'Start Time', 'End Time', 'Code', 'Teacher', 'Start Time', 'End Time'], null, 'A' . $currentRow);
-        $sheet->getStyle('A' . $currentRow . ':L' . $currentRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle('A' . $currentRow . ':L' . $currentRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-        $currentRow++;
-        $previousRoom = $roomName;
-    }
+    // Set the first sheet as active
+    $spreadsheet->setActiveSheetIndex(0);
 
-    // Insert schedule details in the appropriate columns
-    $startColumn = $dayColumns[$dayOfWeek];
-    $sheet->fromArray([$data['subject_code'], $data['first_name'] . ' ' . $data['last_name'], $data['start_time'], $data['end_time']], null, $startColumn . $currentRow);
-    $sheet->getStyle($startColumn . $currentRow . ':' . chr(ord($startColumn) + 3) . $currentRow)
-        ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-    $sheet->getStyle($startColumn . $currentRow . ':' . chr(ord($startColumn) + 3) . $currentRow)
-        ->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-
-    $previousFloor = $floorNumber;
-}
-
-// Ensure the output directory exists and is writable
-$outputDir = 'C:/xampp/htdocs/roomasm-master/admin/output/';
-if (!is_dir($outputDir)) {
-    mkdir($outputDir, 0777, true);
-}
-if (!is_writable($outputDir)) {
-    die("Error: The output directory is not writable.");
-}
-
-$outputPath = $outputDir . 'schedule_report.xlsx';
-try {
-    $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+    // Save the file
+    $writer = new Xlsx($spreadsheet);
     $writer->save($outputPath);
 
-    // Success message with JavaScript alert
-    echo "<script>
-            alert('Excel report created successfully!');
-            window.location.href = 'schedule.php';  // Redirect to your desired page
-          </script>";
+    echo "Master schedule generated successfully at $outputPath";
+
 } catch (Exception $e) {
-    die("Error saving the Excel file: " . $e->getMessage());
+    error_log("Error generating Excel report: " . $e->getMessage());
+    echo "An error occurred while generating the report: " . $e->getMessage();
+} finally {
+    if (isset($mysqli)) {
+        $mysqli->close();
+    }
 }
-// Close the database connection
-$conn->close();
 ?>

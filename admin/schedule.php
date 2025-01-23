@@ -38,7 +38,7 @@ include('./components/main.php');
                             <th>Day</th>
                             <th>Start Time</th>
                             <th>End Time</th>
-                            <th>Subject</th>
+                            <th>Class Code</th>
                             <th>Teacher</th>
                             <th>Actions</th>
                         </tr>

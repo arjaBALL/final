@@ -95,7 +95,6 @@ include('./components/main.php');
                                     <label class="control-label" for="input01">Day of Lecture:</label>
                                     <div class="controls">
                                         <select style="width: 75%;" id="schedule-day-input" name="day_of_week" required>
-                                            <option value="Sunday">Sunday</option>
                                             <option value="Monday">Monday</option>
                                             <option value="Tuesday">Tuesday</option>
                                             <option value="Wednesday">Wednesday</option>
@@ -125,18 +124,9 @@ include('./components/main.php');
 
                                 <!-- Subject Selection -->
                                 <div class="control-group">
-                                    <label class="control-label" for="input01">Subject:</label>
+                                    <label class="control-label" for="input01">Class Code:</label>
                                     <div class="controls">
-                                        <select id="subject" name="subject" required>
-                                            <option value="">Select Subject</option>
-                                            <?php
-                                            include 'fetch_subjects.php';
-                                            while ($subject = $subject_result->fetch_assoc()) { ?>
-                                                <option value="<?php echo $subject['subject_id']; ?>">
-                                                    <?php echo $subject['subject_code']; ?>
-                                                </option>
-                                            <?php } ?>
-                                        </select>
+                                        <input type="text" class="item" id="subject" name="subject" required />
                                     </div>
                                 </div>
 

@@ -3,7 +3,7 @@
         <div class="container">
             <a class="branded"></a>
             <a class="brand">
-                <h1>Room Assignment System</h1>
+                <h1>Class Scheduling System</h1>
             </a>
             <div class="time_top">
                 <font color="white">
